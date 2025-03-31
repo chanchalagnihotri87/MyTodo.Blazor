@@ -1,0 +1,189 @@
+﻿@page "/objective/{Id:int}"
+@inject ProblemClient ProblemClient
+@inject GoalClient GoalClient
+@inject ObjectiveClient ObjectiveClient
+@inject TaskClient TaskClient
+
+@inject PersistentComponentState ApplicationState
+
+@implements IDisposable
+
+<PageTitle>Objective: @objective?.Text</PageTitle>
+
+<BreadCrumbPanel Items="BreadCrumbItems"></BreadCrumbPanel>
+
+@if (objective == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <PageHeading Title="@objective.Text"></PageHeading>
+
+    <TwentyPercentItems Items="tasks"></TwentyPercentItems>
+
+    <div class="row mt-4">
+        <div class="col">
+            <ul class="nav nav-tabs">
+                <li class="nav-item">
+                    <button class="nav-link @(tabHelper.GetTabClass(TabConstants.PlanTab))"
+                            id="vision-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#@TabConstants.PlanTab"
+                            type="button"
+                            role="tab"
+                            aria-controls="home"
+                            aria-selected="true"
+                            @onclick="()=>tabHelper.SetCurrentTab(TabConstants.PlanTab)">
+                        @TabConstants.PlanTab
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link @(tabHelper.GetTabClass(TabConstants.TasksTab))"
+                            id="vision-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#@TabConstants.TasksTab"
+                            type="button"
+                            role="tab"
+                            aria-controls="home"
+                            aria-selected="true"
+                            @onclick="()=> tabHelper.SetCurrentTab(TabConstants.TasksTab)">
+                        @TabConstants.TasksTab
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content border p-3">
+                <div class="tab-pane @(tabHelper.GetTabClass(TabConstants.PlanTab))"
+                     id="plan"
+                     role="tabpanel"
+                     aria-labelledby="profile-tab"
+                     tabindex="0">
+                    <PlanPane T="Objective" Item="objective"></PlanPane>
+                </div>
+
+                <div class="tab-pane @(tabHelper.GetTabClass(TabConstants.TasksTab))"
+                     id="@TabConstants.TasksTab"
+                     role="tabpanel"
+                     aria-labelledby="messages-tab"
+                     tabindex="0">
+                    <ItemsListPane T="TaskItem"
+                                   Items="tasks"
+                                   OnReloadItems="GetTasksAsync"
+                                   ParentId="Id"
+                                   DetailUrl="/task"
+                                   ModalDomain="Task"></ItemsListPane>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+
+    [Parameter]
+    public int Id { get; set; }
+
+    private Problem problem;
+    private Goal goal;
+    private Objective objective;
+    private List<TaskItem> tasks;
+
+    private TabHelper tabHelper = new TabHelper(TabConstants.TasksTab);
+
+    private PersistingComponentStateSubscription persistingSubscription;
+
+
+    private List<BreadCrumbItemDto> BreadCrumbItems => new()
+    {
+        new BreadCrumbItemDto { Title = "Life Areas", Url = "" },
+        new BreadCrumbItemDto { Title = "Problems", Url = $"/lifearea/{problem?.LifeAreaId}" },
+        new BreadCrumbItemDto { Title = "Goals", Url = $"/problem/{problem?.Id}" },
+        new BreadCrumbItemDto { Title = "Objectives", Url = $"/goal/{objective?.GoalId}" },
+        new BreadCrumbItemDto { Title = "Detail", IsLink = false }
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        persistingSubscription = ApplicationState.RegisterOnPersisting(PersistData);
+
+        if (ApplicationState.TryTakeFromJson<Objective>(nameof(objective), out var restoredObjectiveData))
+        {
+            objective = restoredObjectiveData!;
+        }
+        else
+        {
+            await GetObjectiveAsync();
+        }
+
+
+        if (ApplicationState.TryTakeFromJson<List<TaskItem>>(nameof(tasks), out var restoredTasksData))
+        {
+            tasks = restoredTasksData!;
+        }
+        else
+        {
+            await GetTasksAsync();
+        }
+
+        if (ApplicationState.TryTakeFromJson<Goal>(nameof(goal), out var restoredGoalData))
+        {
+            goal = restoredGoalData!;
+        }
+        else
+        {
+            await GetGoalAsync();
+        }
+
+        if (ApplicationState.TryTakeFromJson<Problem>(nameof(problem), out var restoredProblemData))
+        {
+            problem = restoredProblemData!;
+        }
+        else
+        {
+            await GetProblemAsync();
+        }
+    }
+
+    private async Task GetObjectiveAsync()
+    {
+        objective = await ObjectiveClient.GetAsync(Id);
+    }
+
+
+    private async Task GetTasksAsync()
+    {
+        tasks = await TaskClient.GetManyAsync(Id);
+    }
+
+    private async Task GetGoalAsync()
+    {
+        if (objective != null)
+        {
+            goal = await GoalClient.GetAsync(objective.GoalId);
+        }
+
+    }
+
+    private async Task GetProblemAsync()
+    {
+        if (objective != null)
+        {
+            problem = await ProblemClient.GetAsync(goal.ProblemId);
+        }
+
+    }
+
+
+    private Task PersistData()
+    {
+        ApplicationState.PersistAsJson(nameof(tasks), tasks);
+        ApplicationState.PersistAsJson(nameof(objective), objective);
+        ApplicationState.PersistAsJson(nameof(problem), problem);
+        ApplicationState.PersistAsJson(nameof(goal), goal);
+
+        return Task.CompletedTask;
+    }
+
+    void IDisposable.Dispose() => persistingSubscription.Dispose();
+}

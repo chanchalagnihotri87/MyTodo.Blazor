@@ -1,0 +1,196 @@
+﻿@page "/lifearea/{Id:int}"
+
+@inject LifeAreaClient LifeAreaClient
+@inject ProblemClient ProblemClient
+@inject PersistentComponentState ApplicationState
+@inject IJSRuntime JSRuntime
+
+@implements IDisposable
+
+<PageTitle>Life Area: @lifeArea?.Name</PageTitle>
+
+<BreadCrumbPanel Items="BreadCrumbItems"></BreadCrumbPanel>
+
+
+@if (lifeArea == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <PageHeading Title="@lifeArea.Name"></PageHeading>
+
+    <TwentyPercentItems Items="problems"></TwentyPercentItems>
+
+    <div class="row mt-4">
+        <div class="col">
+            <ul class="nav nav-tabs">
+                <li class="nav-item">
+                    <button class="nav-link @(tabHelper.GetTabClass(TabConstants.VisionTab))"
+                            id="vision-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#vision"
+                            type="button"
+                            role="tab"
+                            aria-controls="home"
+                            aria-selected="true"
+                            @onclick="()=> tabHelper.SetCurrentTab(TabConstants.VisionTab)">
+                        Vision
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link @(tabHelper.GetTabClass(TabConstants.PlanTab))"
+                            id="vision-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#plan"
+                            type="button"
+                            role="tab"
+                            aria-controls="home"
+                            aria-selected="true"
+                            @onclick="()=>tabHelper.SetCurrentTab(TabConstants.PlanTab)">
+                        Plan
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link @(tabHelper.GetTabClass(TabConstants.ProblemTab))"
+                            id="vision-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#problems"
+                            type="button"
+                            role="tab"
+                            aria-controls="home"
+                            aria-selected="true"
+                            @onclick="()=> tabHelper.SetCurrentTab(TabConstants.ProblemTab)">
+                        Problems
+                    </button>
+                </li>
+            </ul>
+
+            <!-- Tab panes -->
+            <div class="tab-content border p-3">
+                <div class="tab-pane @(tabHelper.GetTabClass(TabConstants.VisionTab))"
+                     id="vision"
+                     role="tabpanel"
+                     aria-labelledby="home-tab"
+                     tabindex="0">
+                    <LargeTextArea Value="@lifeArea.Vision" OnUpdate="UpdateVision "></LargeTextArea>
+                </div>
+                <div class="tab-pane @(tabHelper.GetTabClass(TabConstants.PlanTab))"
+                     id="plan"
+                     role="tabpanel"
+                     aria-labelledby="profile-tab"
+                     tabindex="0">
+                    <LargeTextArea Value="@lifeArea.Plan" OnUpdate="UpdatePlan "></LargeTextArea>
+                </div>
+
+                <div class="tab-pane @(tabHelper.GetTabClass(TabConstants.ProblemTab))"
+                     id="problems"
+                     role="tabpanel"
+                     aria-labelledby="messages-tab"
+                     tabindex="0">
+                    <ItemsListPane T="Problem"
+                                   Items="problems"
+                                   OnReloadItems="GetProblems"
+                                   ParentId="Id"
+                                   ModalDomain="Problem"
+                                   DetailUrl="/problem"></ItemsListPane>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private TabHelper tabHelper = new TabHelper(TabConstants.ProblemTab);
+
+    private AddEditFormModel addEditModel = new AddEditFormModel();
+
+
+    private LifeArea lifeArea;
+    private List<Problem> problems = new List<Problem>();
+
+    private List<BreadCrumbItemDto> BreadCrumbItems = new()
+    {
+        new BreadCrumbItemDto { Title = "Life Areas", Url = "" },
+        new BreadCrumbItemDto { Title = "Detail", IsLink=false }
+    };
+
+    private PersistingComponentStateSubscription persistingSubscription;
+
+
+    //**********Data Initialization********
+    protected override async Task OnParametersSetAsync()
+    {
+        persistingSubscription = ApplicationState.RegisterOnPersisting(PersistData);
+
+        if (ApplicationState.TryTakeFromJson<LifeArea>(nameof(lifeArea), out var restoredLifeAreaData))
+        {
+            lifeArea = restoredLifeAreaData!;
+        }
+        else
+        {
+            await GetLifeArea();
+        }
+
+        if (ApplicationState.TryTakeFromJson<List<Problem>>(nameof(problems), out var restoredProblemsData))
+        {
+            problems = restoredProblemsData!;
+        }
+        else
+        {
+            await GetProblems();
+        }
+    }
+
+    private Task PersistData()
+    {
+        ApplicationState.PersistAsJson(nameof(lifeArea), lifeArea);
+        ApplicationState.PersistAsJson(nameof(problems), problems);
+
+        return Task.CompletedTask;
+    }
+
+    //**********End of Data Initialization********
+
+
+    //**********Data Fetching********
+
+    private async Task GetLifeArea()
+    {
+        lifeArea = await LifeAreaClient.GetLifeAreaAsync(Id);
+    }
+
+    private async Task GetProblems()
+    {
+        problems = await ProblemClient.GetManyAsync(Id);
+    }
+
+    //**********End of Data Fetching********
+
+
+
+    //**********Life Area Actions********
+
+    public async Task UpdatePlan(string plan)
+    {
+        await LifeAreaClient.UpdatePlanAsync(lifeArea.Id, plan);
+        lifeArea.Plan = plan;
+    }
+
+    public async Task UpdateVision(string vision)
+    {
+        await LifeAreaClient.UpdateVisionAsync(lifeArea.Id, vision);
+        lifeArea.Vision = vision;
+    }
+
+    //**********End of Life Area Actions********
+
+
+
+    void IDisposable.Dispose() => persistingSubscription.Dispose();
+}

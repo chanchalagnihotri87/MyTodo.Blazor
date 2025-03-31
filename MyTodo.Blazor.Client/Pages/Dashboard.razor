@@ -1,0 +1,58 @@
+﻿@page "/"
+
+@inject LifeAreaClient LifeAreaClient
+@inject PersistentComponentState ApplicationState
+@implements IDisposable
+
+<div class="row mt-4 g-4 life-area-box-container">
+    @foreach (var lifeArea in lifeAreas)
+    {
+        <div class="col-4">
+            <NavLink href="@GetLifeAreaUrl(lifeArea.Id)">
+                <div class="border life-area-box">
+                    <h5>@lifeArea.Name</h5>
+                </div>
+            </NavLink>
+        </div>
+    }
+</div>
+
+@code {
+    List<LifeArea> lifeAreas = new List<LifeArea>();
+    private PersistingComponentStateSubscription persistingSubscription;
+
+    protected override async Task OnInitializedAsync()
+    {
+
+        persistingSubscription = ApplicationState.RegisterOnPersisting(PersistData);
+
+        if (!ApplicationState.TryTakeFromJson<List<LifeArea>>(nameof(lifeAreas), out var restoredData))
+        {
+            await GetLifeAreas();
+        }
+        else
+        {
+            lifeAreas = restoredData!;
+        }
+        
+
+    }
+
+    private async Task GetLifeAreas()
+    {
+        lifeAreas = await LifeAreaClient.GetLifeAreasAsync();
+    }
+
+    private Task PersistData()
+    {
+        ApplicationState.PersistAsJson(nameof(lifeAreas), lifeAreas);
+
+        return Task.CompletedTask;
+    }
+    private string GetLifeAreaUrl(int id)
+    {
+        return $"lifearea/{id}";
+    }
+
+    void IDisposable.Dispose() => persistingSubscription.Dispose();
+}

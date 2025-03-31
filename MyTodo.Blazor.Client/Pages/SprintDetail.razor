@@ -1,0 +1,194 @@
+﻿@page "/sprint/{Id:int}"
+@inject SprintClient SprintClient
+@inject TodoClient TodoClient
+
+@inject IJSRuntime JSRuntime
+
+@inject PersistentComponentState ApplicationState
+
+@implements IDisposable
+
+<PageTitle>Sprint: @sprint?.Text </PageTitle>
+
+<BreadCrumbPanel Items="BreadCrumbItems"></BreadCrumbPanel>
+
+@if (sprint == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div class="row">
+        <div class="col-md-6">
+            <PageHeading Title="@sprint.Text"></PageHeading>
+        </div>
+        <div class="col-md-6 text-end">
+            @sprint.StartDate.ToString("MM/dd/yyyy") - @sprint.EndDate.ToString("MM/dd/yyyy")
+        </div>
+    </div>
+
+    @if (todoItems != null)
+    {
+        <div class="row">
+            <div class="col">
+                @foreach (var item in todoItems.Where(x => x.Date != null && x.Date.Value.Date == DateTime.Today && !x.Completed))
+                {
+                    <button class="btn btn-outline-success btn-sm me-1">
+                        @item.Text
+                    </button>
+                }
+            </div>
+        </div>
+    }
+ 
+
+    <div class="row mt-3">
+        <div class="col-md-12">
+            <p class="mb-0">Tasks</p>
+        </div>
+    </div>
+
+    <hr class="mt-2" />
+    <div class="row mt-4">
+        <div class="col">
+            @if (todoItems != null)
+            {
+                <ul class="list-group">
+
+                    @foreach (var item in todoItems)
+                    {
+                        <li class="list-group-item">
+
+                            <div class="row">
+                                <div class="col-1">
+                                    @if (item.Completed)
+                                    {
+                                        <input class="form-check-input me-2"
+                                               type="checkbox"
+                                               id="@item.Id"
+                                               checked
+                                               @oninput="()=> ToggleCompleted(item)"></input>
+                                    }
+                                    else
+                                    {
+                                        <input class="form-check-input me-2"
+                                               type="checkbox"
+                                               id="@item.Id"
+                                               @oninput="()=> ToggleCompleted(item)"></input>
+                                    }
+
+                                </div>
+                                <div class="col-8">
+                                    <NavLink href="@($"/sprint/{item.Id}")">@item.Text</NavLink>
+                                </div>
+
+                                <div class="col-3 text-end">
+                                    <select class="form-select" @onchange="(args)=> UpdateDate( item.Id ,args.Value)">
+                                        <option value="">Select Date</option>
+                                        @for (DateTime date = sprint.StartDate.Date; date < sprint.EndDate.Date; date = date.AddDays(1))
+                                        {
+                                            if (item.Date.HasValue && date == item.Date.Value.Date)
+                                            {
+                                                <option value="@date.ToString("MM/dd/yyyy")" selected>@date.ToLongDateString()</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@date.ToString("MM/dd/yyyy")">@date.ToLongDateString()</option>
+                                            }
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <p>Loading...</p>
+            }
+        </div>
+    </div>
+}
+
+@code {
+
+    [Parameter]
+    public int Id { get; set; }
+
+    private Sprint addEditModel = new Sprint();
+
+    private AddEditSprintModal addEditModalDialog;
+
+    private Sprint sprint;
+    private List<TodoItem> todoItems;
+
+
+
+    private PersistingComponentStateSubscription persistingSubscription;
+
+
+    private List<BreadCrumbItemDto> BreadCrumbItems => new()
+    {
+        new BreadCrumbItemDto { Title = "Sprints", Url = "/sprints" }
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        persistingSubscription = ApplicationState.RegisterOnPersisting(PersistData);
+
+        if (ApplicationState.TryTakeFromJson<Sprint>(nameof(sprint), out var restoredSprintData))
+        {
+            sprint = restoredSprintData!;
+        }
+        else
+        {
+            await GetSprintAsync();
+        }
+
+        if (ApplicationState.TryTakeFromJson<List<TodoItem>>(nameof(todoItems), out var restoredTodoItemsData))
+        {
+            todoItems = restoredTodoItemsData!;
+        }
+        else
+        {
+            await GetTodoItemsAsync();
+        }
+    }
+
+    private async Task UpdateDate(int id, object value)
+    {
+        await TodoClient.UpdateDateAsync(id, value == null ? null : value.ToString());
+
+        await GetTodoItemsAsync();
+    }
+
+    private async Task GetSprintAsync()
+    {
+        sprint = await SprintClient.GetAsync(Id);
+    }
+
+    private async Task GetTodoItemsAsync()
+    {
+        todoItems = await TodoClient.GetManyOfSprintAsync(Id);
+
+    }
+
+    private Task PersistData()
+    {
+        ApplicationState.PersistAsJson(nameof(sprint), sprint);
+        ApplicationState.PersistAsJson(nameof(todoItems), todoItems);
+        return Task.CompletedTask;
+    }
+
+
+    private async Task ToggleCompleted(TodoItem item)
+    {
+        await TodoClient.ToggleComplete(item.Id, !item.Completed);
+
+        await GetTodoItemsAsync();
+    }
+
+
+    void IDisposable.Dispose() => persistingSubscription.Dispose();
+}

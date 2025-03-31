@@ -1,0 +1,183 @@
+﻿@using MyTodo.Blazor.Client.Services.API.Clients
+@typeparam T where T : class, IListItem
+@inject IMyTodoHttpClient<T> ApiClient
+@inject IJSRuntime JSRuntime
+
+
+<div class="row mb-2">
+    <div class="col text-end">
+        <button class="btn btn-outline-dark btn-sm" @onclick="StartAddingItem">
+            Add a @ModalDomain
+        </button>
+    </div>
+</div>
+
+
+<SortableList TItem="T"
+              Data="Items.ToList()"
+              Context="item"
+              OnUpdate="OnListUpdate">
+    <ItemTemplate>
+        <div class="row">
+            <div class="col-1">
+                @if (item.Completed)
+                {
+                    <input class="form-check-input me-2"
+                           type="checkbox"
+                           id="@item.Id"
+                           checked
+                           @oninput="()=> ToggleCompleted(item)"></input>
+                }
+                else
+                {
+                    <input class="form-check-input me-2"
+                           type="checkbox"
+                           id="@item.Id"
+                           @oninput="()=> ToggleCompleted(item)"></input>
+                }
+
+            </div>
+            <div class="col-8">
+                <NavLink href=@($"{DetailUrl}/{item.Id}")>@item.Text</NavLink>
+            </div>
+
+            <div class="col-1">
+                @if (item.TwentyPercent)
+                {
+                    <span class="badge text-bg-dark rounded-pill">Top 20%</span>
+                }
+            </div>
+
+            <div class="col-2 text-end">
+                @if (item.TwentyPercent)
+                {
+                    <button class="btn btn-sm btn-outline-secondary me-1"
+                            type="button" @onclick="()=> ToggleTwentyPercent(item)">
+                        80%
+                    </button>
+                }
+                else
+                {
+                    <button class="btn btn-sm btn-outline-secondary me-1"
+                            type="button" @onclick="()=> ToggleTwentyPercent(item)">
+                        20%
+                    </button>
+                }
+
+                <button type="button"
+                        class="btn btn-sm btn-outline-secondary me-1"
+                        @onclick="()=> StartEditingItem(item)">
+                    <i class="fas fa-solid fa-pencil"></i>
+                </button>
+                <button type="button"
+                        class="btn btn-sm btn-outline-secondary"
+                        @onclick="()=> DeleteItem(item)">
+                    <i class="fas fa-solid fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    </ItemTemplate>
+</SortableList>
+
+<AddEditModal @ref="addEditModalDialog" ModalDomain="@ModalDomain" model="addEditModel" OnSubmit="OnSubmit"></AddEditModal>
+
+@code {
+    private AddEditFormModel addEditModel = new AddEditFormModel();
+
+    private AddEditModal addEditModalDialog;
+
+    [Parameter]
+    public IList<T> Items { get; set; }
+
+    [Parameter]
+    public string ModalDomain { get; set; } = "";
+
+    [Parameter]
+    public string DetailUrl { get; set; } = "";
+
+    [Parameter]
+    public int ParentId { get; set; }
+
+    [Parameter]
+    public EventCallback OnReloadItems { get; set; }
+
+
+    protected async Task OnListUpdate(SortableListEventArgs args)
+    {
+         var itemToMove = Items.ElementAt(args.OldIndex);
+
+        await ApiClient.MoveAsync(itemToMove.Id, args.NewIndex, ParentId);
+
+        await OnReloadItems.InvokeAsync();
+    }
+
+    private async Task StartAddingItem()
+    {
+
+        addEditModel = new AddEditFormModel();
+
+        await ShowAddEditModal();
+
+    }
+
+    private async Task StartEditingItem(IListItem item)
+    {
+        addEditModel = new AddEditFormModel
+            {
+                Id = item.Id,
+                Title = item.Text
+            };
+
+        await ShowAddEditModal();
+    }
+
+    private async Task ShowAddEditModal()
+    {
+        await addEditModalDialog.ShowModal();
+    }
+
+    private async Task HideAddEditModal()
+    {
+        await addEditModalDialog.HideModal();
+    }
+
+    private async Task ToggleCompleted(IListItem item)
+    {
+        await ApiClient.ToggleComplete(item.Id, !item.Completed);
+
+        await OnReloadItems.InvokeAsync();
+    }
+
+    private async Task ToggleTwentyPercent(IListItem item)
+    {
+        await ApiClient.ToggleTwentyPercent(item.Id, !item.TwentyPercent);
+
+        await OnReloadItems.InvokeAsync();
+    }
+
+    private async Task DeleteItem(IListItem item)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to delete this {ModalDomain.ToLower()}?");
+
+
+        await ApiClient.DeleteAsync(item.Id);
+
+        await OnReloadItems.InvokeAsync();
+    }
+
+    private async Task OnSubmit(AddEditFormModel model)
+    {
+        if (model.Id == 0)
+        {
+            await ApiClient.CreateAsync(model.Title, ParentId);
+        }
+        else
+        {
+            await ApiClient.UpdateTextAsync(model.Id, model.Title);
+        }
+
+        await HideAddEditModal();
+
+        await OnReloadItems.InvokeAsync();
+    }
+}

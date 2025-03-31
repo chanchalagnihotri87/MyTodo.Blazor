@@ -1,0 +1,35 @@
+﻿@using MyTodo.Blazor.Client.Data.Dtos
+<div class="row">
+    <div class="col">
+        <div class="row">
+            <div class="col">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        @foreach (var item in Items)
+                        {
+                            <li class="breadcrumb-item">
+                                @if (item.IsLink)
+                                {
+                                    <NavLink href="@item.Url">@item.Title</NavLink>
+                                }
+                                else
+                                {
+                                    <text>@item.Title</text>
+                                }
+
+                            </li>
+                        }
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+
+    [Parameter]
+    public IEnumerable<BreadCrumbItemDto> Items { get; set; }
+}
+
+

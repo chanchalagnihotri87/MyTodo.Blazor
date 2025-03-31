@@ -1,0 +1,196 @@
+﻿@page "/sprints"
+@inject SprintClient SprintClient
+
+@inject IJSRuntime JSRuntime
+
+@inject PersistentComponentState ApplicationState
+
+@implements IDisposable
+
+<PageTitle>Sprints</PageTitle>
+
+<BreadCrumbPanel Items="BreadCrumbItems"></BreadCrumbPanel>
+
+@if (sprints == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <PageHeading Title="Sprints"></PageHeading>
+
+    <div class="row">
+        <div class="col text-end">
+            <button type="button" class="btn btn-outline-dark btn-sm" @onclick="StartAddingItem"> Add Sprint </button>
+        </div>
+    </div>
+    <div class="row mt-4">
+        <div class="col">
+            <ul class="list-group">
+
+                @foreach (var item in sprints)
+                {
+                    <li class="list-group-item">
+
+                        <div class="row">
+                            <div class="col-1">
+                                @if (item.Completed)
+                                {
+                                    <input class="form-check-input me-2"
+                                           type="checkbox"
+                                           id="@item.Id"
+                                           checked
+                                           @oninput="()=> ToggleCompleted(item)"></input>
+                                }
+                                else
+                                {
+                                    <input class="form-check-input me-2"
+                                           type="checkbox"
+                                           id="@item.Id"
+                                           @oninput="()=> ToggleCompleted(item)"></input>
+                                }
+
+                            </div>
+                            <div class="col-5">
+                                <NavLink href="@($"/sprint/{item.Id}")">@item.Text</NavLink>
+                            </div>
+
+                            <div class="col-4">
+                                @item.StartDate.ToString("MM/dd/yyyy") - @item.EndDate.ToString("MM/dd/yyyy")
+                            </div>
+
+                            <div class="col-2 text-end">
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-secondary me-1"
+                                        @onclick="()=> StartEditingItem(item)">
+                                    <i class="fas fa-solid fa-pencil"></i>
+                                </button>
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        @onclick="()=> DeleteItem(item)">
+                                    <i class="fas fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </li>
+                }
+            </ul>
+            <AddEditSprintModal @ref="addEditModalDialog" model="addEditModel" OnSubmit="OnSubmit"></AddEditSprintModal>
+        </div>
+    </div>
+}
+
+@code {
+
+    [Parameter]
+    public int Id { get; set; }
+
+    private Sprint addEditModel = new Sprint();
+
+    private AddEditSprintModal addEditModalDialog;
+
+    private List<Sprint> sprints;
+
+
+    private PersistingComponentStateSubscription persistingSubscription;
+
+
+    private List<BreadCrumbItemDto> BreadCrumbItems => new()
+    {
+        new BreadCrumbItemDto { Title = "Sprints", Url = "/sprints" }
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        persistingSubscription = ApplicationState.RegisterOnPersisting(PersistData);
+
+        if (ApplicationState.TryTakeFromJson<List<Sprint>>(nameof(sprints), out var restoredSprintsData))
+        {
+            sprints = restoredSprintsData!;
+        }
+        else
+        {
+            await GetSprintsAsync();
+        }
+    }
+
+    private async Task GetSprintsAsync()
+    {
+        sprints = await SprintClient.GetManyAsync();
+
+    }
+
+    private async Task StartAddingItem()
+    {
+
+        addEditModel = new Sprint { StartDate = DateTime.Now, EndDate = DateTime.Now.AddDays(7) };
+
+        await ShowAddEditModal();
+
+    }
+
+    private async Task StartEditingItem(Sprint item)
+    {
+        addEditModel = new Sprint
+            {
+                Id = item.Id,
+                Text = item.Text,
+                StartDate = item.StartDate,
+                EndDate = item.EndDate
+            };
+
+        await ShowAddEditModal();
+    }
+
+    private async Task ShowAddEditModal()
+    {
+        await addEditModalDialog.ShowModal();
+    }
+
+    private async Task HideAddEditModal()
+    {
+        await addEditModalDialog.HideModal();
+    }
+
+    private Task PersistData()
+    {
+        ApplicationState.PersistAsJson(nameof(sprints), sprints);
+        return Task.CompletedTask;
+    }
+
+
+    private async Task ToggleCompleted(Sprint item)
+    {
+        await SprintClient.ToggleComplete(item.Id, !item.Completed);
+
+        await GetSprintsAsync();
+    }
+
+    private async Task OnSubmit(Sprint model)
+    {
+        if (model.Id == 0)
+        {
+            await SprintClient.CreateAsync(model.Text, model.StartDate.ToString("MM/dd/yyyy"), model.EndDate.ToString("MM/dd/yyyy"));
+        }
+        else
+        {
+            await SprintClient.UpdateAsync(model.Id, model.Text, model.StartDate.ToString("MM/dd/yyyy"), model.EndDate.ToString("MM/dd/yyyy"));
+        }
+
+        await HideAddEditModal();
+
+        await GetSprintsAsync();
+    }
+
+    private async Task DeleteItem(Sprint item)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to delete this task?");
+
+        await SprintClient.DeleteAsync(item.Id);
+
+        await GetSprintsAsync();
+    }
+
+
+    void IDisposable.Dispose() => persistingSubscription.Dispose();
+}

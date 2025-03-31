@@ -1,0 +1,31 @@
+﻿@typeparam T where T : class, IListItem
+@inject IMyTodoHttpClient<T> ApiClient
+
+<LargeTextArea Value="@Item.Plan" OnUpdate="UpdatePlan"></LargeTextArea>
+
+@code {
+
+    [Parameter]
+    public IListItem Item { get; set; }
+
+
+    private async Task UpdatePlan(string plan)
+    {
+        var oldPlanText = Item.Plan;
+        Item.Plan = plan;
+
+        try
+        {
+            await ApiClient.UpdatePlanAsync(Item.Id, plan);
+        }
+        catch (Exception ex)
+        {
+            Item.Plan = oldPlanText;
+
+            throw ex;
+        }
+
+
+    }
+
+}

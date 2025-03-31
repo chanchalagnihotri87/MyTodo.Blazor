@@ -1,0 +1,16 @@
+﻿<div class="row">
+    <div class="col">
+        @foreach (var item in Items.Where(x => x.TwentyPercent))
+        {
+            <button class="btn btn-outline-success btn-sm me-1">
+                @item.Text
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+
+    [Parameter]
+    public IEnumerable<ITwentyPercent> Items { get; set; }
+}

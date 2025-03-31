@@ -1,0 +1,341 @@
+﻿@page "/task/{Id:int}"
+@inject ProblemClient ProblemClient
+@inject GoalClient GoalClient
+@inject ObjectiveClient ObjectiveClient
+@inject TaskClient TaskClient
+@inject TodoClient TodoClient
+@inject SprintClient SprintClient
+@inject IJSRuntime JSRuntime
+
+@inject PersistentComponentState ApplicationState
+
+@implements IDisposable
+
+<PageTitle>Objective: @task?.Text</PageTitle>
+
+<BreadCrumbPanel Items="BreadCrumbItems"></BreadCrumbPanel>
+
+@if (task == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <PageHeading Title="@task.Text"></PageHeading>
+
+    <TwentyPercentItems Items="todoItems"></TwentyPercentItems>
+
+    <div class="row mt-4 mb-2">
+        <div class="col-md-9">
+            <p class="mb-0">Todo Items</p>
+        </div>
+        <div class="col text-end">
+            <button type="button" class="btn btn-outline-dark btn-sm" @onclick="StartAddingItem"> Add an item </button>
+        </div>
+    </div>
+    <hr class="mt-2" />
+    <div class="row mt-4">
+        <div class="col">
+
+            <SortableList TItem="TodoItem"
+            Data="todoItems.ToList()"
+            Context="item"
+            OnUpdate="OnListUpdate">
+                <ItemTemplate>
+                    <div class="row">
+                        <div class="col-1">
+                            @if (item.Completed)
+                            {
+                                <input class="form-check-input me-2"
+                                type="checkbox"
+                                id="@item.Id"
+                                checked
+                                @oninput="()=> ToggleCompleted(item)"></input>
+                            }
+                            else
+                            {
+                                <input class="form-check-input me-2"
+                                type="checkbox"
+                                id="@item.Id"
+                                @oninput="()=> ToggleCompleted(item)"></input>
+                            }
+
+                        </div>
+                        <div class="col-7">
+                            @item.Text
+                        </div>
+
+                        <div class="col-2">
+                            <select class="form-select text-muted" @onchange="(args)=> UpdateSprint( item.Id ,args.Value)">
+                                <option selected value="">Sprint</option>
+                                @foreach (var sprint in sprints)
+                                {
+                                    @if (item.SprintId == sprint.Id)
+                                    {
+                                        <option value="@sprint.Id" selected>@sprint.Text</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@sprint.Id">@sprint.Text</option>
+                                    }
+                                    
+                                }
+
+                            </select>
+                        </div>
+
+                        <div class="col-2 text-end">
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-secondary me-1"
+                                    @onclick="()=> StartEditingItem(item)">
+                                <i class="fas fa-solid fa-pencil"></i>
+                            </button>
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-secondary"
+                                    @onclick="()=> DeleteItem(item)">
+                                <i class="fas fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </ItemTemplate>
+            </SortableList>
+
+            <AddEditModal @ref="addEditModalDialog" ModalDomain="Task" model="addEditModel" OnSubmit="OnSubmit"></AddEditModal>
+
+        </div>
+    </div>
+}
+
+@code {
+
+    [Parameter]
+    public int Id { get; set; }
+
+    private AddEditFormModel addEditModel = new AddEditFormModel();
+
+    private AddEditModal addEditModalDialog;
+
+    private Problem problem;
+    private Goal goal;
+    private Objective objective;
+    private TaskItem task;
+    private List<TodoItem> todoItems;
+    private List<Sprint> sprints;
+
+
+    private PersistingComponentStateSubscription persistingSubscription;
+
+
+    private List<BreadCrumbItemDto> BreadCrumbItems => new()
+    {
+        new BreadCrumbItemDto { Title = "Life Areas", Url = "" },
+        new BreadCrumbItemDto { Title = "Problems", Url = $"/lifearea/{problem?.LifeAreaId}" },
+        new BreadCrumbItemDto { Title = "Goals", Url = $"/problem/{problem?.Id}" },
+        new BreadCrumbItemDto { Title = "Objectives", Url = $"/goal/{objective?.GoalId}" },
+        new BreadCrumbItemDto { Title = "Tasks", Url = $"/objective/{task?.ObjectiveId}" },
+        new BreadCrumbItemDto { Title = "Detail", IsLink = false }
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        persistingSubscription = ApplicationState.RegisterOnPersisting(PersistData);
+
+        if (ApplicationState.TryTakeFromJson<TaskItem>(nameof(task), out var restoredTaskData))
+        {
+            task = restoredTaskData!;
+        }
+        else
+        {
+            await GetTaskAsync();
+        }
+
+
+        if (ApplicationState.TryTakeFromJson<List<TodoItem>>(nameof(todoItems), out var restoredTodosData))
+        {
+            todoItems = restoredTodosData!;
+        }
+        else
+        {
+            await GetTodoItemsAsync();
+        }
+
+        if (ApplicationState.TryTakeFromJson<Objective>(nameof(objective), out var restoredObjectiveData))
+        {
+            objective = restoredObjectiveData!;
+        }
+        else
+        {
+            await GetObjectiveAsync();
+        }
+
+        if (ApplicationState.TryTakeFromJson<Goal>(nameof(goal), out var restoredGoalData))
+        {
+            goal = restoredGoalData!;
+        }
+        else
+        {
+            await GetGoalAsync();
+        }
+
+        if (ApplicationState.TryTakeFromJson<Problem>(nameof(problem), out var restoredProblemData))
+        {
+            problem = restoredProblemData!;
+        }
+        else
+        {
+            await GetProblemAsync();
+        }
+
+        if (ApplicationState.TryTakeFromJson<List<Sprint>>(nameof(sprints), out var restoredSprintsData))
+        {
+            sprints = restoredSprintsData!;
+        }
+        else
+        {
+            await GetSprintsAsync();
+        }
+    }
+
+    private async Task GetTaskAsync()
+    {
+        task = await TaskClient.GetAsync(Id);
+    }
+
+
+    private async Task GetTodoItemsAsync()
+    {
+        todoItems = await TodoClient.GetManyAsync(Id);
+    }
+
+    private async Task GetObjectiveAsync()
+    {
+        if (task != null)
+        {
+            objective = await ObjectiveClient.GetAsync(task.ObjectiveId);
+        }
+    }
+
+
+    private async Task GetGoalAsync()
+    {
+        if (objective != null)
+        {
+            goal = await GoalClient.GetAsync(objective.GoalId);
+        }
+
+    }
+
+    private async Task GetProblemAsync()
+    {
+        if (goal != null)
+        {
+            problem = await ProblemClient.GetAsync(goal.ProblemId);
+        }
+
+    }
+
+    private async Task GetSprintsAsync()
+    {
+        sprints = await SprintClient.GetManyAsync();
+
+    }
+
+    private async Task StartAddingItem()
+    {
+
+        addEditModel = new AddEditFormModel();
+
+        await ShowAddEditModal();
+
+    }
+
+    private async Task StartEditingItem(TodoItem item)
+    {
+        addEditModel = new AddEditFormModel
+            {
+                Id = item.Id,
+                Title = item.Text
+            };
+
+        await ShowAddEditModal();
+    }
+
+    private async Task ShowAddEditModal()
+    {
+        await addEditModalDialog.ShowModal();
+    }
+
+    private async Task HideAddEditModal()
+    {
+        await addEditModalDialog.HideModal();
+    }
+
+    private async Task UpdateSprint(int id, object value)
+    {
+        if (value == null)
+        {
+            await TodoClient.UpdateSprintAsync(id, null);
+            return;
+        }
+
+        var sprintId = Convert.ToInt32(value);
+        await TodoClient.UpdateSprintAsync(id, sprintId);
+    }
+
+    private Task PersistData()
+    {
+        ApplicationState.PersistAsJson(nameof(task), task);
+        ApplicationState.PersistAsJson(nameof(todoItems), todoItems);
+        ApplicationState.PersistAsJson(nameof(sprints), sprints);
+        ApplicationState.PersistAsJson(nameof(objective), objective);
+        ApplicationState.PersistAsJson(nameof(goal), goal);
+        ApplicationState.PersistAsJson(nameof(problem), problem);
+
+        return Task.CompletedTask;
+    }
+
+    protected async Task OnListUpdate(SortableListEventArgs args)
+    {
+        var itemToMove = todoItems.ElementAt(args.OldIndex);
+
+        await TodoClient.MoveAsync(itemToMove.Id, args.NewIndex, Id);
+
+        await GetTodoItemsAsync();
+    }
+
+    private async Task ToggleCompleted(TodoItem item)
+    {
+        await TodoClient.ToggleComplete(item.Id, !item.Completed);
+
+        await GetTodoItemsAsync();
+    }
+
+    private async Task OnSubmit(AddEditFormModel model)
+    {
+        if (model.Id == 0)
+        {
+            await TodoClient.CreateAsync(model.Title, Id);
+        }
+        else
+        {
+            await TodoClient.UpdateTextAsync(model.Id, model.Title);
+        }
+
+        await HideAddEditModal();
+
+        await GetTodoItemsAsync();
+    }
+
+    private async Task DeleteItem(TodoItem item)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to delete this task?");
+
+
+        await TodoClient.DeleteAsync(item.Id);
+
+        await GetTodoItemsAsync();
+    }
+
+
+    void IDisposable.Dispose() => persistingSubscription.Dispose();
+}

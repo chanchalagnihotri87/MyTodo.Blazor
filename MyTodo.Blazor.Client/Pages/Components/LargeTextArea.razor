@@ -1,0 +1,22 @@
+﻿<InputTextArea name=""
+               id=""
+               rows="5"
+               cols="30"
+               class="form-control"
+               @bind-Value="@Value"
+               @onblur="UpdateValue"></InputTextArea>
+
+@code {
+
+    [Parameter]
+    public string Value { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnUpdate { get; set; }
+
+    private async Task UpdateValue()
+    {
+        await OnUpdate.InvokeAsync(Value);
+    }
+
+}
