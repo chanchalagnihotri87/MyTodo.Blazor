@@ -5,12 +5,26 @@ namespace MyTodo.Blazor.Client.Services.API.Clients
 {
     public class LifeAreaClient(HttpClient http)
     {
-        public async Task<List<LifeArea>> GetLifeAreasAsync() =>
-        (await http.GetFromJsonAsync<LifeAreaResponse>("lifeareas")).LifeAreas ?? [];
+        public async Task<List<LifeArea>> GetLifeAreasAsync() {
+            try
+            {
+                var response = await http.GetFromJsonAsync<LifeAreaResponse>("/lifearea-service/lifeareas");
+
+                return response.LifeAreas ?? [];
+            }
+            catch (Exception ex)
+            {
+
+                throw ex;
+            }
+          
+        }
+
+        
 
         public async Task<LifeArea> GetLifeAreaAsync(int id)
         {
-            return (await http.GetFromJsonAsync<LifeAreaDetailResponse>($"lifeareas/detail/{id}")).LifeArea;
+            return (await http.GetFromJsonAsync<LifeAreaDetailResponse>($"/lifeareas/detail/{id}")).LifeArea;
         }
 
         public async Task UpdatePlanAsync(int id, string plan)

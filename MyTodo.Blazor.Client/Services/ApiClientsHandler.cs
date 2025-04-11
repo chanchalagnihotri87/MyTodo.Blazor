@@ -5,7 +5,7 @@
         public static void ConfigureApiClients(this IServiceCollection services, IConfiguration configuration)
         {
             services.AddHttpClient<LifeAreaClient>(client =>
-                  client.BaseAddress = new Uri("https://mytodoapi-client.azurewebsites.net/lifearea-service");
+                  client.BaseAddress = new Uri("https://mytodoapi-client.azurewebsites.net"));
 
             services.AddHttpClient<ProblemClient>(client =>
                 client.BaseAddress = new Uri("https://mytodoapi-client.azurewebsites.net/problem-service"));
