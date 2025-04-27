@@ -1,3 +1,4 @@
+using MyTodo.Blazor.Client.Configurations;
 using MyTodo.Blazor.Client.Data;
 using MyTodo.Blazor.Client.Pages;
 using MyTodo.Blazor.Client.Services;
@@ -5,6 +6,8 @@ using MyTodo.Blazor.Client.Services.API.Clients;
 using MyTodo.Blazor.Components;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.Configure<ApiServicePrefix>(builder.Configuration.GetSection("ApiServicePrefix"));
 
 // Add services to the container.
 builder.Services.AddRazorComponents()

@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using MyTodo.Blazor.Client.Configurations;
 using MyTodo.Blazor.Client.Services;
 using MyTodo.Blazor.Client.Services.API.Clients;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
+
+builder.Services.Configure<ApiServicePrefix>(builder.Configuration.GetSection("ApiServicePrefix"));
 
 builder.Services.ConfigureApiClients(builder.Configuration);
 
